@@ -1,0 +1,381 @@
+#import require python classes and packages
+from tkinter import *
+import tkinter
+from tkinter import filedialog
+from tkinter import simpledialog
+from tkinter import ttk
+from tkinter.filedialog import askopenfilename
+import pickle
+import pandas as pd
+import numpy as np
+import os
+import joblib
+import seaborn as sns
+import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score,precision_score,recall_score,f1_score
+from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from skimage.transform import resize
+from skimage.io import imread
+import cv2
+from skimage import io, transform
+from sklearn import preprocessing
+import tensorflow as tf
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, classification_report, confusion_matrix
+from tensorflow.keras.preprocessing.image import img_to_array, load_img
+#designing main screenmain = tkinter.Tk()
+main.title("Automated Trash Classification: Using MobileNet V2 for Efficient Waste Sorting") 
+screen_width = main.winfo_screenwidth()
+screen_height = main.winfo_screenheight()
+main.geometry(f"{screen_width}x{screen_height}")
+#define global variables to calculate and store accuracy and other metrics
+precision = []
+recall = []
+fscore = []
+accuracy = []
+#define global variables
+X = []
+Y = []
+path = "dataset"
+labels = []
+def loadDataset():
+    text.delete('1.0', END)
+    global path, labels, name, X, Y, root, img, getLabel
+     #define function to load class labels
+     for root, dirs, directory in os.walk(path):
+           for j in range(len(directory)):
+                 name = os.path.basename(root)
+                  if name not in labels:
+                      labels.append(name.strip())
+      def getLabel(name):
+            index = -1
+            for i in range(len(labels)):
+                  if labels[i] == name:
+                      index = i
+             break
+       return index
+text.insert(END, "Labels found in dataset are “+str(labels)+”\n)
+#loop and read all images from dataset
+if os.path.exists('model/X.txt.npy'):
+    X = np.load('model/X.txt.npy’)
+    Y = np.load('model/Y.txt.npy')
+else:#if not processed then read and process each image
+       X = []
+       Y = []
+       for root, dirs, directory in os.walk(path):
+                    for j in range(len(directory)):
+                           name = os.path.basename(root)
+                           if 'Thumbs.db' not in directory[j]:
+                                 img = cv2.imread(root+"/"+directory[j])
+                                 img = cv2.resize(img, (64, 64))
+                                 X.append(img)
+                                 label = getLabel(name)
+                                 Y.append(label)
+              X = np.asarray(X)
+              Y = np.asarray(Y)
+              np.save('model/X.txt',X)
+              np.save('model/Y.txt',Y)            
+   text.insert(END, "Trash Dataset Loading is Completed  \n\n")
+  text.insert(END, "Total Images Found in Dataset =     "+str(X.shape[0])+"\n") 
+                                 label = getLabel(name)
+                                 Y.append(label)
+              X = np.asarray(X)
+              Y = np.asarray(Y)
+              np.save('model/X.txt',X)
+              np.save('model/Y.txt',Y)            
+   text.insert(END, "Trash Dataset Loading is Completed  \n\n")
+  text.insert(END, "Total Images Found in Dataset =     "+str(X.shape[0])+"\n") 
+#count plot
+def SampleDisplay():
+     text.delete('1.0', END)
+    global X, Y, x, labels, ax
+    df = pd.DataFrame(X)
+    df['Target'] = Y
+    plt.figure(figsize=(10, 6))
+    ax = sns.countplot(data = df, x = 'Target')
+    plt.xlabel('Target')
+    ax.set_xticklabels(labels)
+    plt.ylabel('Count')
+    plt.title('Count of metal, paper and plastic’)
+    for p in ax.patches:
+ ax.annotate(f'{p.get_height()}', (p.get_x() + p.get_width()/ 2., p.get_height()),ha='center', va='center', fontsize=10, color='black', xytext=(0, 5), textcoords='offset points’)
+    plt.show() 
+#splitting the dataset
+ def splitDataset():
+      text.delete('1.0', END) 
+   global X, Y, X_train, X_test, y_train, y_test
+   X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2) 
+   text.insert(END,"80% dataset for training = "+str(X_train.shape[0])+"\n")
+   text.insert(END,"20% dataset for training = "+str(X_test.shape[0])+"\n")
+   text.insert(END, "Data Splitting is Completed \n")
+#calculate metrics
+def calculateMetrics(algorithm, predict, testY): 
+    testY = testY.astype('int')
+    predict = predict.astype('int')
+    p = precision_score(testY, predict,average='macro') * 100
+    r = recall_score(testY, predict,average='macro') * 100
+    f = f1_score(testY, predict,average='macro') * 100
+    a = accuracy_score(testY,predict)*100     
+    accuracy.append(a)
+    precision.append(p)
+    recall.append(r)
+    fscore.append(f)
+    text.insert(END,algorithm+" Accuracy  :  "+str(a)+"\n")
+    text.insert(END,algorithm+" Precision : "+str(p)+"\n")
+    text.insert(END,algorithm+" Recall    : "+str(r)+"\n")
+    text.insert(END,algorithm+" FScore    : "+str(f)+"\n\n")        
+    classes = ['metal', 'paper', 'plastic']
+    conf_matrix = confusion_matrix(testY, predict) 
+    plt.figure(figsize =(5, 5))
+  ax = sns.heatmap(conf_matrix, xticklabels = classes, yticklabels = classes, annot  = True, cmap="Pastel1" ,fmt ="g");
+    ax.set_ylim([0,len(classes)])
+    plt.title(algorithm+" Confusion matrix") 
+    plt.ylabel('True class') 
+    plt.xlabel('Predicted class') 
+    plt.show()
+#knn algorithm
+def MLModels():
+    text.delete('1.0', END)
+    global X_train, X_test, y_train, y_test, predict, clf
+   #reshaping images data to train with ML algorithms  
+    if os.path.exists('KNN.pkl'):
+       # Load the trained model from the file
+        clf = joblib.load('KNN.pkl')
+        print("Model loaded successfully.")
+        predict = clf.predict(X_test)
+        calculateMetrics("KNN Classifier", predict, y_test)
+   else:
+  # Train the model (assuming X_train and y_train are defined)
+        clf = KNeighborsClassifier()
+        clf.fit(X_train, y_train)
+        # Save the trained model to a file
+        joblib.dump(clf, 'KNN.pkl')
+        print("Model saved successfully.")
+        predict = clf.predict(X_test)
+        calculateMetrics("KNN Classifier", predict, y_test)
+#ensemble algorithm
+def EnsembleModel():
+      global X_train, y_train, X_test, y_test, rf_cls, rf_predict
+      if os.path.exists('rfc.pkl’):
+     # Load the trained model from the file
+        rf_cls = joblib.load('rfc.pkl')
+    rf_cls = joblib.load('rfc.pkl')
+    print("Model loaded successfully.")
+    predict = rf_cls.predict(X_test)
+    calculateMetrics("KNN Classifier", predict, y_test)
+  else:
+     # Train the model (assuming X_train and y_train are defined)
+     rf_cls = KNeighborsClassifier()
+     rf_cls.fit(X_train, y_train)
+     # Save the trained model to a file
+     joblib.dump(rf_cls, 'KNN.pkl’)
+     print("Model saved successfully.")
+     rf_predict = rf_cls.predict(X_test)
+     calculateMetrics("Ensemble Classifier", rf_predict, y_test)
+#mobilenetv2 model
+def Proposed():
+ global x, predictions, base_model, model, model_path, train_datagen, train_generator, history, validation_datagen, validation_generator
+ global checkpoint, early_stop, predicted_classes, true_classes, history_fine, reduce_lr
+# Check if model exists
+model_path = 'best_model.h5'
+ if os.path.exists(model_path):
+      # Load the model
+      model = load_model(model_path)
+      print("Model loaded successfully.")
+else:
+    # Load the MobileNetV2 model with pre-trained ImageNet weights
+    base_model = MobileNetV2(weights='imagenet', include_top=
+    False, input_shape=(224, 224, 3))
+     base_model.trainable = False      # Add custom layers
+      x = base_model.output
+      x = GlobalAveragePooling2D()(x)
+      x = Dense(1024, activation='relu')(x)
+      x = Dropout(0.5)(x)
+       x = Dense(512, activation='relu')(x)
+      x = Dropout(0.5)(x)
+      predictions = Dense(3, activation='softmax')(x)
+    # Create the final model
+    model = Model(inputs=base_model.input, outputs=predictions)
+    # Compile the model
+      model.compile(optimizer=Adam(learning_rate=0.0001),    loss='categorical_crossentropy', metrics=['accuracy'])
+    # Data augmentation for training data
+    train_datagen = ImageDataGenerator(
+            rescale=1./255,
+            rotation_range=30,
+            width_shift_range=0.2,
+            height_shift_range=0.2,
+            shear_range=0.2,
+            zoom_range=0.2,
+            horizontal_flip=True,
+            fill_mode="nearest“
+     )        train_generator = train_datagen.flow_from_directory(
+            r'dataset',
+            target_size=(224, 224),
+            batch_size=32,
+    class_mode='categorical’
+           )
+            # Validation data
+     validation_datagen = ImageDataGenerator(rescale=1./255)
+     validation_generator = validation_datagen.flow_from_directory(
+            r'test_data',
+            target_size=(224, 224),
+            batch_size=32,
+            class_mode='categorical'
+        )      # Callbacks
+checkpoint = ModelCheckpoint(model_path, monitor='val_accuracy', save_best_only=True, mode='max’)
+early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6, verbose=1)
+    # Train the model
+       history = model.fit(
+       train_generator,
+       validation_data=validation_generator,
+       epochs=10,
+          callbacks=[checkpoint, early_stop, reduce_lr]
+          )
+         # Fine-tuning
+        for layer in base_model.layers[-30:]:
+      layer.trainable = Truemodel.compile(optimizer=Adam(learning_r ate=1e-5),  loss='categorical_crossentropy', metrics=['accuracy’])
+         history_fine = model.fit(
+              train_generator,
+              validation_data=validation_generator,
+              epochs=20,callbacks=[checkpoint, early_stop, reduce_lr]
+              )
+         print("Model trained and saved successfully.")
+# Load test data
+test_datagen = ImageDataGenerator(rescale=1./255)
+test_generator = test_datagen.flow_from_directory(
+   r'test_data',  # Replace with path to test data
+   target_size=(224, 224),
+   batch_size=32,
+       class_mode='categorical',
+        shuffle=False
+  )
+# Predict and calculate metrics
+predictions = model.predict(test_generator)
+predicted_classes = np.argmax(predictions, axis=1)
+true_classes = test_generator.classes
+calculateMetrics("MobileNetV2 Waste Classification",   predicted_classes, true_classes)
+def PerformanceGraph():    
+ #comparison
+df=pd.DataFrame([['ProposedMobileNetV2','Accuracy',accuracy[2]],['ProposeMobileNetV2','Precision',precision[2]],['ProposedMobileNetV2','Recall',recall[2]],['ProposedMobileNetV2','FSCORE',fscore[2]],  ['KNN','Accuracy',accuracy[1]],['KNN','Precision',precision[1]],['KNN','Recall',recall[1]],['KNN','FSCORE',fscore[1]],['Ensemble','Accuracy',accuracy[0]],['Ensemble','Precision',precision[0]],['Ensemble','Recall',recall[0]],['Ensemble','FSCO RE',fscore[0]], ],columns=['Parameters','Algorithms','Value'])
+    df.pivot("Parameters", "Algorithms", "Value").plot(kind='bar', figsize=(8, 6))
+    plt.title("Performance Evaluation")
+    plt.show()
+def predict_image(image_path):
+       img = load_img(image_path, target_size=(224, 224))
+       img_array = img_to_array(img)
+       img_array = np.expand_dims(img_array, axis=0)
+       img_array /= 255.0       predictions = model.predict(img_array) 
+       predicted_class = np.argmax(predictions, axis=1)[0]
+       return predicted_class
+def predict():
+    text.delete('1.0', END)
+    global filename, img, classes, output_name, output_number 
+    classes = ['metal', 'paper', 'plastic']
+    filename = filedialog.askopenfilename(initialdir="testImages")
+    output_number = predict_image(filename)
+    output_name = classes[output_number] 
+    img = load_img(filename) 
+    plt.imshow(img)
+    plt.text(6, 5, f'Predicted Output: {output_name}', color='yellow', fontsize=12, weight='bold', backgroundcolor='black')
+    plt.axis('off')
+    plt.show()
+def Exit():
+    main.destroy()
+# Main Window Designingfont = ('times', 16, 'bold')
+title = Label(main, text='Automated Trash Classification: Using MobileNet V2 for Efficient Waste Sorting', justify=LEFT)
+title.config(bg='pale turquoise', fg='DarkOrchid1')  
+title.config(font=font)           
+title.config(height=3, width=120)       
+title.place(x=100,y=5)
+title.pack()
+font1 = ('times', 13, 'bold')
+uploadButton = Button(main, text="Input Data Analysis", command=loadDataset)
+uploadButton.place(x=1250,y=100)
+uploadButton.config(font=font1)
+processButton = Button(main, text="Visualization", command=SampleDisplay)
+processButton.place(x=1250,y=150)
+processButton.config(font=font1) 
+splitButton = Button(main, text="Data Splitting", command=splitDataset)
+splitButton.place(x=1250,y=200)
+splitButton.config(font=font1) 
+MLButton = Button(main, text="Build & Train ML Models", command=MLModels)
+MLButton.place(x=1250,y=250)
+MLButton.config(font=font1)
+EnsembleButton = Button(main, text="Build & Train Ensemble Model", command=EnsembleModel)
+EnsembleButton.place(x=1250,y=300)
+EnsembleButton.config(font=font1)
+ProposedButton = Button(main, text="Build & Train Proposed Model", command=Proposed)
+ProposedButton.place(x=1250,y=350)
+ProposedButton.config(font=font1)
+PerformanceButton = Button(main, text="Performance Graph", command=PerformanceGraph)
+PerformanceButton.place(x=1250,y=400)
+PerformanceButton.config(font=font1)
+predictButton = Button(main, text="Trash Type Prediction", command=predict)
+predictButton.place(x=1250,y=450)
+predictButton.config(font=font1)
+closeButton = Button(main, text="Close the Application", command=Exit)
+closeButton.place(x=1250,y=500)
+closeButton.config(font=font1)
+font1 = ('times', 12, 'bold')
+text=Text(main,height=30,width=140)
+scroll=Scrollbar(text)
+text.configure(yscrollcommand=scroll.set)
+text.place(x=45,y=100)
+text.config(font=font1)
+main.config(bg='lavender blush')
+main.mainloop()
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+           
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+                   
+
+
+
+
+
+
+
+
